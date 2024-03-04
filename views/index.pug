@@ -1,5 +1,40 @@
 extends layout
 
 block content
-  h1= title
-  p Welcome to #{title}
+      header.app-header
+        img(src="/images/logo.png", alt="logo",)
+
+      div.app-body
+        div.app-heading(style="margin-bottom: 40px;")
+          h1 Welcome to Skier Mesh
+          h4 We are coming soon to offer the best skiing experience you ever had!
+
+        p.app-info-block Estimated Date
+          strong.subVal#date ?
+
+        p.app-info-block Current Temperature
+          strong.subVal#temp ?
+
+        p.app-info-block Current Weather
+          strong.subVal#weather ?
+
+        p.app-info-block Latency to server
+          strong.subVal#latency ? ms
+
+
+        div.app-deploy
+          a(href="https://www.snow-space.com/en/winter" class="btn mb-10-m btn-try") View Details
+
+
+        div.area
+          ul.circles
+            li
+            li
+            li
+            li
+            li
+            li
+            li
+            li
+            li
+            li
