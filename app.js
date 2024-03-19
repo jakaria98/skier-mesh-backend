@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 
 // Routes
 const pathsRoutes = require('./routes/paths');
+const slopesRoutes = require('./routes/slopes');
 // Import other routes as necessary
 
 const app = express();
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ extended: true })); // For parsing application/x-ww
 // Use routes
 
 app.use('/api/paths', pathsRoutes);
+app.use('/api/slopes', slopesRoutes);
 
 // A simple test route
 app.get('/', (req, res) => {
