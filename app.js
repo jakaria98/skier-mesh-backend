@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 
 // Routes
+const waypointsRoutes = require('./routes/waypoints');
 const pathsRoutes = require('./routes/paths');
 const slopesRoutes = require('./routes/slopes');
 // Import other routes as necessary
@@ -22,7 +23,7 @@ app.use(express.json()); // For parsing application/json
 app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
 
 // Use routes
-
+app.use('/api/waypoints', waypointsRoutes);
 app.use('/api/paths', pathsRoutes);
 app.use('/api/slopes', slopesRoutes);
 
