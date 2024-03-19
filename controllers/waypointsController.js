@@ -115,6 +115,60 @@ res.json({
   }
 };
 
+exports.getAllPaths = async (req, res) => {
+  const { startId, endId } = req.body; // Receive start and end IDs as input
+
+  try {
+    // Find all slopes from the database
+    const slopes = await Slope.find().populate('start end');
+
+    // Create a map of slopes for easy lookup by start ID
+    const slopeMap = new Map();
+    slopes.forEach(slope => {
+      if (!slopeMap.has(slope.start._id.toString())) {
+        slopeMap.set(slope.start._id.toString(), []);
+      }
+      slopeMap.get(slope.start._id.toString()).push(slope);
+    });
+
+    // Initialize an array to store all paths
+    const allPaths = [];
+
+    // Define a recursive function for DFS
+    const dfs = (currentId, path) => {
+      path.push(currentId);
+
+      // If we reached the end, add the path to allPaths
+      if (currentId === endId) {
+        allPaths.push([...path]);
+      } else {
+        // Otherwise, continue the search on all neighboring slopes
+        const currentSlopes = slopeMap.get(currentId);
+        if (currentSlopes) {
+          currentSlopes.forEach(currentSlope => {
+            const neighborId = currentSlope.end._id.toString();
+            if (!path.includes(neighborId)) {
+              dfs(neighborId, [...path, currentSlope]); // Include the current slope in the path
+            }
+          });
+        }
+      }
+
+      // Backtrack
+      path.pop();
+    };
+
+    // Start the DFS
+    dfs(startId, []);
+
+    // Return all paths
+    res.json(allPaths);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
 
 exports.getAllWaypoints = async (req, res) => {
   try {
