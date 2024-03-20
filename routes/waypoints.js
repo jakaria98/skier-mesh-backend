@@ -4,7 +4,7 @@ const waypointsController = require('../controllers/waypointsController');
 
 router.get('/', waypointsController.getAllWaypoints);
 router.get('/shortestPath', waypointsController.getShortestPath);
-router.get('/allPaths', waypointsController.getAllPaths);
+router.post('/allPaths', waypointsController.getAllPaths);
 router.post('/', waypointsController.createWaypoint);
 router.get('/:id', waypointsController.getWaypointById);
 router.put('/:id', waypointsController.updateWaypoint);
