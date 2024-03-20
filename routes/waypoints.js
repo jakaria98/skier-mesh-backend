@@ -3,7 +3,7 @@ const router = express.Router();
 const waypointsController = require('../controllers/waypointsController');
 
 router.get('/', waypointsController.getAllWaypoints);
-router.get('/shortestPath', waypointsController.getShortestPath);
+router.get('/shortestPath/:path1Id/:path2Id', waypointsController.getShortestPath);
 router.get('/allPaths/:startId/:endId', waypointsController.getAllPaths);
 router.post('/', waypointsController.createWaypoint);
 router.get('/:id', waypointsController.getWaypointById);

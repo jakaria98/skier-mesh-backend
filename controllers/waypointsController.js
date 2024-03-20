@@ -3,7 +3,7 @@ const Slope = require('../models/Slope');
 const Waypoint = require('../models/Waypoint');
 
 exports.getShortestPath = async (req, res) => {
-    const { path1Id, path2Id } = req.body; // Receive two path IDs as input
+    const { path1Id, path2Id } = req.params; // Receive two path IDs as input
 
     try {
         // Find all slopes from the database
