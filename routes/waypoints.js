@@ -10,4 +10,4 @@ router.get('/:id', waypointsController.getWaypointById);
 router.put('/:id', waypointsController.updateWaypoint);
 router.delete('/:id', waypointsController.deleteWaypoint);
 
-module.exports = router;
+module.exports = router;

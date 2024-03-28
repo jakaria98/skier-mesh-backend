@@ -13,12 +13,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // MongoDB Connection
-mongoose
-    .connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => {
-        console.log('Connected to MongoDB...');
-    })
-    .catch((err) => console.error('Could not connect to MongoDB...', err));
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => {
+    console.log('Connected to MongoDB...');
+  })
+  .catch(err => console.error('Could not connect to MongoDB...', err));
 
 app.use(cors());
 
@@ -33,10 +32,10 @@ app.use('/api/slopes', slopesRoutes);
 
 // A simple test route
 app.get('/', (req, res) => {
-    res.send('Welcome to Skier Mesh!');
+  res.send('Welcome to Skier Mesh!');
 });
 
 // Starting the server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
