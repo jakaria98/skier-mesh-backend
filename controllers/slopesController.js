@@ -13,6 +13,7 @@ exports.createSlope = async (req, res) => {
   const slope = new Slope({
     start: req.body.start,
     end: req.body.end,
+    slopeName: req.body.slopeName,
     difficultyLevel: req.body.difficultyLevel,
     length: req.body.length,
     incline: req.body.incline
