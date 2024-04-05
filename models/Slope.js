@@ -11,6 +11,7 @@ const slopeSchema = new mongoose.Schema({
       ref: 'Waypoint',
       required: true
     },
+    slopeName: String,
     difficultyLevel: String,
     length: Number,
     incline: Number
