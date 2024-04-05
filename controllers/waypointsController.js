@@ -330,7 +330,111 @@ exports.shortestPathbyTime = async (req, res) => {
     }
 };
 
+exports.longestPathByTime = async (req, res) => {
+    const { startWaypoint, endWaypoint } = req.body;
 
+    try {
+        // Define lift durations
+        const LIFT_DURATIONS = {
+            '6-chair lift': 7, // 7 minutes
+            'T-Lift': 5, // 5 minutes
+            'Gondola': 10 // 10 minutes
+        };
+
+        // Find all slopes from the database
+        const slopes = await Slope.find().populate('start end');
+
+        // Find all lifts from the database
+        const lifts = await Lift.find().populate('waypoints');
+
+        // Create a map of slopes for easy lookup by start ID
+        const slopeMap = new Map();
+        slopes.forEach((slope) => {
+            if (!slopeMap.has(slope.start._id.toString())) {
+                slopeMap.set(slope.start._id.toString(), []);
+            }
+            slopeMap.get(slope.start._id.toString()).push(slope);
+        });
+
+        // Create a map of lifts for easy lookup by waypoint IDs
+        const liftMap = new Map();
+        lifts.forEach((lift) => {
+            lift.waypoints.forEach((waypoint, index) => {
+                const waypointId = waypoint._id.toString();
+                if (!liftMap.has(waypointId)) {
+                    liftMap.set(waypointId, []);
+                }
+                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+            });
+        });
+
+        // Initialize distances map to store longest distances
+        const distances = new Map();
+
+        // Initialize a priority queue for Dijkstra's algorithm
+        const pq = new PriorityQueue({ comparator: (a, b) => b[1] - a[1] }); // Priority queue sorted by distance (descending order)
+
+        // Initialize distances for all waypoints to negative infinity except startWaypoint
+        const waypoints = Array.from(slopeMap.keys()).concat(Array.from(liftMap.keys()));
+        waypoints.forEach((waypoint) => {
+            distances.set(waypoint, waypoint === startWaypoint ? 0 : Number.NEGATIVE_INFINITY);
+            pq.queue([waypoint, distances.get(waypoint)]);
+        });
+
+        // Initialize a map to store the previous node in the longest path
+        const previous = new Map();
+
+        // Dijkstra's algorithm
+        while (pq.length) {
+            const [currentId, currentDistance] = pq.dequeue();
+
+            // Check neighboring slopes
+            const currentSlopes = slopeMap.get(currentId) || [];
+            currentSlopes.forEach((currentSlope) => {
+                const neighborId = currentSlope.end._id.toString();
+                const length = currentSlope.length;
+                const weight = (length / SLOPE_SPEED) * 60; // Convert hours to minutes
+
+                const newDistance = currentDistance + weight;
+                if (newDistance > distances.get(neighborId)) {
+                    distances.set(neighborId, newDistance);
+                    pq.queue([neighborId, newDistance]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+
+            // Check neighboring lifts
+            const currentLifts = liftMap.get(currentId) || [];
+            currentLifts.forEach(({ lift, index }) => {
+                const { waypoints } = lift;
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const neighborId = waypoints[nextIndex]._id.toString();
+                const duration = LIFT_DURATIONS[lift.liftType]; // Get lift duration
+
+                const newDistance = currentDistance + duration;
+                if (newDistance > distances.get(neighborId)) {
+                    distances.set(neighborId, newDistance);
+                    pq.queue([neighborId, newDistance]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+        }
+
+        // Reconstruct longest path
+        const longestPath = [];
+        let current = endWaypoint;
+        while (current !== startWaypoint) {
+            longestPath.unshift(current);
+            current = previous.get(current);
+        }
+        longestPath.unshift(startWaypoint);
+
+        // Return longest path
+        res.json(longestPath);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
 
 
 exports.getAllPaths = async (req, res) => {
