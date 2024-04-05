@@ -7,6 +7,7 @@ const cors = require('cors');
 const waypointsRoutes = require('./routes/waypoints');
 const pathsRoutes = require('./routes/paths');
 const slopesRoutes = require('./routes/slopes');
+const liftsRoutes = require('./routes/lifts');
 // Import other routes as necessary
 
 const app = express();
@@ -29,6 +30,7 @@ app.use(express.urlencoded({ extended: true })); // For parsing application/x-ww
 app.use('/api/waypoints', waypointsRoutes);
 app.use('/api/paths', pathsRoutes);
 app.use('/api/slopes', slopesRoutes);
+app.use('/api/lifts', liftsRoutes);
 
 // A simple test route
 app.get('/', (req, res) => {
