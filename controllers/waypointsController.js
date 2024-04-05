@@ -1,6 +1,7 @@
 const Path = require('../models/Path');
 const Slope = require('../models/Slope');
 const Waypoint = require('../models/Waypoint');
+const Lift = require('../models/Lift');
 
 exports.getShortestPath = async (req, res) => {
     const { path1Id, path2Id } = req.params; // Receive two path IDs as input
@@ -112,6 +113,95 @@ exports.getShortestPath = async (req, res) => {
             length: totalLength,
             difficultyLevel: commonDifficultyLevel,
         });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+
+exports.allByPathByDifficultyLevel = async (req, res) => {
+    const { startWaypoint, endWaypoint, level1, level2, level3 } = req.body;
+
+    try {
+        // Initialize an array to store selected difficulty levels
+        const selectedDifficultyLevels = [];
+        if (level1) selectedDifficultyLevels.push('Level1');
+        if (level2) selectedDifficultyLevels.push('Level2');
+        if (level3) selectedDifficultyLevels.push('Level3');
+
+        // If no difficulty levels are selected, return empty result
+        if (selectedDifficultyLevels.length === 0) {
+            return res.json(["Nothing to show"]);
+        }
+
+        // Find slopes from the database based on selected difficulty levels
+        const slopes = await Slope.find({ difficultyLevel: { $in: selectedDifficultyLevels } }).populate('start end');
+
+        // Find all lifts from the database
+        const lifts = await Lift.find().populate('waypoints');
+
+        // Create a map of slopes for easy lookup by start ID
+        const slopeMap = new Map();
+        slopes.forEach((slope) => {
+            if (!slopeMap.has(slope.start._id.toString())) {
+                slopeMap.set(slope.start._id.toString(), []);
+            }
+            slopeMap.get(slope.start._id.toString()).push(slope);
+        });
+
+        // Create a map of lifts for easy lookup by waypoint IDs
+        const liftMap = new Map();
+        lifts.forEach((lift) => {
+            lift.waypoints.forEach((waypoint) => {
+                const waypointId = waypoint._id.toString();
+                if (!liftMap.has(waypointId)) {
+                    liftMap.set(waypointId, []);
+                }
+                liftMap.get(waypointId).push(lift);
+            });
+        });
+        console.log("Slopes and Lifts");
+        console.log(slopeMap, liftMap);
+        // Initialize an array to store all paths
+        const allPaths = [];
+
+        // Define a recursive function for DFS
+        const dfs = (currentId, path) => {
+            path.push(currentId);
+
+            // If we reached the end, add the path to allPaths
+            if (currentId === endWaypoint) {
+                allPaths.push([...path]);
+            } else {
+                // Otherwise, continue the search on all neighboring slopes and lifts
+                const currentSlopes = slopeMap.get(currentId) || [];
+                currentSlopes.forEach((currentSlope) => {
+                    const neighborId = currentSlope.end._id.toString();
+                    if (!path.includes(neighborId)) {
+                        dfs(neighborId, [...path, currentSlope]);
+                    }
+                });
+
+                const currentLifts = liftMap.get(currentId) || [];
+                currentLifts.forEach((currentLift) => {
+                    currentLift.waypoints.forEach((waypoint) => {
+                        const neighborId = waypoint._id.toString();
+                        if (!path.includes(neighborId)) {
+                            dfs(neighborId, [...path, currentLift]);
+                        }
+                    });
+                });
+            }
+
+            // Backtrack
+            path.pop();
+        };
+
+        // Start the DFS
+        dfs(startWaypoint, []);
+
+        // Return all paths
+        res.json(allPaths);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

@@ -1,5 +1,6 @@
 const Lift = require('../models/Lift');
-
+const Slope = require('../models/Slope');
+const Waypoint = require('../models/Waypoint');
 exports.getAllLifts = async (req, res) => {
   try {
     const lifts = await Lift.find().populate('waypoints');
@@ -8,6 +9,7 @@ exports.getAllLifts = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 exports.createLift = async (req, res) => {
   const lift = new Lift({
