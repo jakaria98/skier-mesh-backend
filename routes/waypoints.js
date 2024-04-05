@@ -8,6 +8,7 @@ router.get('/allPaths/:startId/:endId', waypointsController.getAllPaths);
 router.post('/allByPathByDifficultyLevel', waypointsController.allByPathByDifficultyLevel);
 router.post('/shortestPathbyTime', waypointsController.shortestPathbyTime);
 router.post('/easiestPath', waypointsController.easiestPath);
+router.post('/minLiftUsagePath', waypointsController.minLiftUsagePath);
 router.post('/longestPathByTime', waypointsController.longestPathByTime);
 router.post('/', waypointsController.createWaypoint);
 router.get('/:id', waypointsController.getWaypointById);

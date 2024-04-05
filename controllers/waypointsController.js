@@ -545,6 +545,111 @@ exports.easiestPath = async (req, res) => {
     }
 };
 
+exports.minLiftUsagePath = async (req, res) => {
+    const { startWaypoint, endWaypoint } = req.body;
+
+    try {
+        // Define lift type weights
+        const LIFT_TYPE_WEIGHTS = {
+            '6-chair lift': 1,
+            'T-Lift': 1,
+            'Gondola': 2
+        };
+
+        // Find all slopes from the database
+        const slopes = await Slope.find().populate('start end');
+
+        // Find all lifts from the database
+        const lifts = await Lift.find().populate('waypoints');
+
+        // Create a map of slopes for easy lookup by start ID
+        const slopeMap = new Map();
+        slopes.forEach((slope) => {
+            if (!slopeMap.has(slope.start._id.toString())) {
+                slopeMap.set(slope.start._id.toString(), []);
+            }
+            slopeMap.get(slope.start._id.toString()).push(slope);
+        });
+
+        // Create a map of lifts for easy lookup by waypoint IDs
+        const liftMap = new Map();
+        lifts.forEach((lift) => {
+            lift.waypoints.forEach((waypoint, index) => {
+                const waypointId = waypoint._id.toString();
+                if (!liftMap.has(waypointId)) {
+                    liftMap.set(waypointId, []);
+                }
+                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+            });
+        });
+
+        // Initialize lift usage map to store minimum lift usage
+        const liftUsage = new Map();
+
+        // Initialize a priority queue for Dijkstra's algorithm
+        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] }); // Priority queue sorted by lift usage
+
+        // Initialize start waypoint lift usage to 0 and add it to the priority queue
+        liftUsage.set(startWaypoint, 0);
+        pq.queue([startWaypoint, 0]);
+
+        // Initialize a map to store the previous node in the path with minimum lift usage
+        const previous = new Map();
+
+        // Dijkstra's algorithm
+        while (pq.length) {
+            const [currentId, currentLiftUsage] = pq.dequeue();
+
+            // If we reached the end waypoint, break out of the loop
+            if (currentId === endWaypoint) {
+                break;
+            }
+
+            // Check neighboring slopes
+            const currentSlopes = slopeMap.get(currentId) || [];
+            currentSlopes.forEach((currentSlope) => {
+                const neighborId = currentSlope.end._id.toString();
+
+                const newLiftUsage = currentLiftUsage;
+                if (!liftUsage.has(neighborId) || newLiftUsage < liftUsage.get(neighborId)) {
+                    liftUsage.set(neighborId, newLiftUsage);
+                    pq.queue([neighborId, newLiftUsage]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+
+            // Check neighboring lifts
+            const currentLifts = liftMap.get(currentId) || [];
+            currentLifts.forEach(({ lift, index }) => {
+                const { waypoints } = lift;
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const neighborId = waypoints[nextIndex]._id.toString();
+                const liftType = lift.liftType;
+
+                const newLiftUsage = currentLiftUsage + LIFT_TYPE_WEIGHTS[liftType];
+                if (!liftUsage.has(neighborId) || newLiftUsage < liftUsage.get(neighborId)) {
+                    liftUsage.set(neighborId, newLiftUsage);
+                    pq.queue([neighborId, newLiftUsage]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+        }
+
+        // Reconstruct path with minimum lift usage
+        const minLiftUsagePath = [];
+        let current = endWaypoint;
+        while (current !== startWaypoint) {
+            minLiftUsagePath.unshift(current);
+            current = previous.get(current);
+        }
+        minLiftUsagePath.unshift(startWaypoint);
+
+        // Return path with minimum lift usage
+        res.json(minLiftUsagePath);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
 
 
 exports.getAllPaths = async (req, res) => {
