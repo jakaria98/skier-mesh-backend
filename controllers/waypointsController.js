@@ -207,6 +207,132 @@ exports.allByPathByDifficultyLevel = async (req, res) => {
     }
 };
 
+const PriorityQueue = require('js-priority-queue');
+
+const SLOPE_SPEED = 20; // km/hr
+
+exports.shortestPathbyTime = async (req, res) => {
+    const { startWaypoint, endWaypoint } = req.body;
+
+    try {
+        // Find all slopes from the database
+        const slopes = await Slope.find().populate('start end');
+
+        // Find all lifts from the database
+        const lifts = await Lift.find().populate('waypoints');
+
+        // Create a map of slopes for easy lookup by start ID
+        const slopeMap = new Map();
+        slopes.forEach((slope) => {
+            if (!slopeMap.has(slope.start._id.toString())) {
+                slopeMap.set(slope.start._id.toString(), []);
+            }
+            slopeMap.get(slope.start._id.toString()).push(slope);
+        });
+
+        // Create a map of lifts for easy lookup by waypoint IDs
+        const liftMap = new Map();
+        lifts.forEach((lift) => {
+            lift.waypoints.forEach((waypoint, index) => {
+                const waypointId = waypoint._id.toString();
+                if (!liftMap.has(waypointId)) {
+                    liftMap.set(waypointId, []);
+                }
+                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+            });
+        });
+
+        // Initialize distances map to store shortest distances
+        const distances = new Map();
+
+        // Initialize a priority queue for Dijkstra's algorithm
+        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] }); // Priority queue sorted by distance
+
+        // Initialize start waypoint distance to 0 and add it to the priority queue
+        distances.set(startWaypoint, 0);
+        pq.queue([startWaypoint, 0]);
+
+        // Initialize a map to store the previous node in the shortest path
+        const previous = new Map();
+
+        // Dijkstra's algorithm
+        while (pq.length) {
+            const [currentId, currentDistance] = pq.dequeue();
+
+            // If we reached the end waypoint, break out of the loop
+            if (currentId === endWaypoint) {
+                break;
+            }
+
+            // If the current distance is greater than the stored distance, skip
+            if (currentDistance > distances.get(currentId)) {
+                continue;
+            }
+
+            // Check neighboring slopes
+            const currentSlopes = slopeMap.get(currentId) || [];
+            currentSlopes.forEach((currentSlope) => {
+                const neighborId = currentSlope.end._id.toString();
+                const length = currentSlope.length;
+                const weight = (length / SLOPE_SPEED) * 60; // Convert hours to minutes
+
+                const newDistance = currentDistance + weight;
+                if (!distances.has(neighborId) || newDistance < distances.get(neighborId)) {
+                    distances.set(neighborId, newDistance);
+                    pq.queue([neighborId, newDistance]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+
+            // Check neighboring lifts
+            const currentLifts = liftMap.get(currentId) || [];
+            currentLifts.forEach(({ lift, index }) => {
+                const { waypoints } = lift;
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const neighborId = waypoints[nextIndex]._id.toString();
+                let weight = 0;
+                switch (lift.liftType) {
+                    case '6-chair lift':
+                        weight = 7; // 7 minutes
+                        break;
+                    case 'T-Lift':
+                        weight = 5; // 5 minutes
+                        break;
+                    case 'Gondola':
+                        weight = 10; // 10 minutes
+                        break;
+                    default:
+                        weight = 0; // Default weight (shouldn't happen)
+                }
+
+                const newDistance = currentDistance + weight;
+                if (!distances.has(neighborId) || newDistance < distances.get(neighborId)) {
+                    distances.set(neighborId, newDistance);
+                    pq.queue([neighborId, newDistance]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+        }
+
+        // Reconstruct shortest path
+        const shortestPath = [];
+        let current = endWaypoint;
+        while (current !== startWaypoint) {
+            shortestPath.unshift(current);
+            current = previous.get(current);
+        }
+        shortestPath.unshift(startWaypoint);
+
+        // Return shortest path
+        res.json(shortestPath);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+
+
+
 exports.getAllPaths = async (req, res) => {
     const { startId, endId } = req.params; // Receive start and end IDs as input
 
