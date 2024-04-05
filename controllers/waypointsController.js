@@ -437,6 +437,116 @@ exports.longestPathByTime = async (req, res) => {
 };
 
 
+exports.easiestPath = async (req, res) => {
+    const { startWaypoint, endWaypoint } = req.body;
+
+    try {
+        // Define difficulty level weights
+        const DIFFICULTY_WEIGHTS = {
+            'level1': 1,
+            'level2': 2,
+            'level3': 3
+        };
+
+        // Find all slopes from the database
+        const slopes = await Slope.find().populate('start end');
+
+        // Find all lifts from the database
+        const lifts = await Lift.find().populate('waypoints');
+
+        // Create a map of slopes for easy lookup by start ID
+        const slopeMap = new Map();
+        slopes.forEach((slope) => {
+            if (!slopeMap.has(slope.start._id.toString())) {
+                slopeMap.set(slope.start._id.toString(), []);
+            }
+            slopeMap.get(slope.start._id.toString()).push(slope);
+        });
+
+        // Create a map of lifts for easy lookup by waypoint IDs
+        const liftMap = new Map();
+        lifts.forEach((lift) => {
+            lift.waypoints.forEach((waypoint, index) => {
+                const waypointId = waypoint._id.toString();
+                if (!liftMap.has(waypointId)) {
+                    liftMap.set(waypointId, []);
+                }
+                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+            });
+        });
+
+        // Initialize distances map to store least difficulty level weights
+        const weights = new Map();
+
+        // Initialize a priority queue for Dijkstra's algorithm
+        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] }); // Priority queue sorted by weight
+
+        // Initialize start waypoint weight to 0 and add it to the priority queue
+        weights.set(startWaypoint, 0);
+        pq.queue([startWaypoint, 0]);
+
+        // Initialize a map to store the previous node in the easiest path
+        const previous = new Map();
+
+        // Dijkstra's algorithm
+        while (pq.length) {
+            const [currentId, currentWeight] = pq.dequeue();
+
+            // If we reached the end waypoint, break out of the loop
+            if (currentId === endWaypoint) {
+                break;
+            }
+
+            // Check neighboring slopes
+            const currentSlopes = slopeMap.get(currentId) || [];
+            currentSlopes.forEach((currentSlope) => {
+                const neighborId = currentSlope.end._id.toString();
+                const difficultyLevel = currentSlope.difficultyLevel;
+
+                const newWeight = currentWeight + DIFFICULTY_WEIGHTS[difficultyLevel];
+                if (!weights.has(neighborId) || newWeight < weights.get(neighborId)) {
+                    weights.set(neighborId, newWeight);
+                    pq.queue([neighborId, newWeight]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+
+            // Check neighboring lifts
+            const currentLifts = liftMap.get(currentId) || [];
+            currentLifts.forEach(({ lift, index }) => {
+                const { waypoints } = lift;
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const neighborId = waypoints[nextIndex]._id.toString();
+
+                const difficultyLevel = 'lift'; // Assume lift difficulty level as 'lift'
+
+                const newWeight = currentWeight + DIFFICULTY_WEIGHTS[difficultyLevel];
+                if (!weights.has(neighborId) || newWeight < weights.get(neighborId)) {
+                    weights.set(neighborId, newWeight);
+                    pq.queue([neighborId, newWeight]);
+                    previous.set(neighborId, currentId);
+                }
+            });
+        }
+
+        // Reconstruct easiest path
+        const easiestPath = [];
+        let current = endWaypoint;
+        while (current !== startWaypoint) {
+            easiestPath.unshift(current);
+            current = previous.get(current);
+        }
+        easiestPath.unshift(startWaypoint);
+
+        // Return easiest path
+        res.json(easiestPath);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+
+
 exports.getAllPaths = async (req, res) => {
     const { startId, endId } = req.params; // Receive start and end IDs as input
 
