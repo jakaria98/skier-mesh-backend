@@ -2,7 +2,7 @@ const Lift = require('../models/Lift');
 
 exports.getAllLifts = async (req, res) => {
   try {
-    const lifts = await Lift.find();
+    const lifts = await Lift.find().populate('waypoints');
     res.json(lifts);
   } catch (err) {
     res.status(500).json({ message: err.message });
