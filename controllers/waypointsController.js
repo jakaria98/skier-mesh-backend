@@ -460,6 +460,112 @@ exports.shortestPathbyTime = async (req, res) => {
 //     }
 // };
 
+// exports.longestPathByTime = async (req, res) => {
+//     const { startWaypoint, endWaypoint } = req.body;
+
+//     try {
+//         // Define lift durations
+//         const LIFT_DURATIONS = {
+//             '6-chair lift': 7, // 7 minutes
+//             'T-Lift': 5, // 5 minutes
+//             'Gondola': 10 // 10 minutes
+//         };
+
+//         // Find all slopes from the database
+//         const slopes = await Slope.find().populate('start end');
+
+//         // Find all lifts from the database
+//         const lifts = await Lift.find().populate('waypoints');
+
+//         // Create a map of slopes for easy lookup by start ID
+//         const slopeMap = new Map();
+//         slopes.forEach((slope) => {
+//             if (!slopeMap.has(slope.start._id.toString())) {
+//                 slopeMap.set(slope.start._id.toString(), []);
+//             }
+//             slopeMap.get(slope.start._id.toString()).push(slope);
+//         });
+
+//         // Create a map of lifts for easy lookup by waypoint IDs
+//         const liftMap = new Map();
+//         lifts.forEach((lift) => {
+//             lift.waypoints.forEach((waypoint, index) => {
+//                 const waypointId = waypoint._id.toString();
+//                 if (!liftMap.has(waypointId)) {
+//                     liftMap.set(waypointId, []);
+//                 }
+//                 liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+//             });
+//         });
+
+//         // Initialize distances map to store longest distances
+//         const distances = new Map();
+
+//         // Initialize a priority queue for Dijkstra's algorithm
+//         const pq = new PriorityQueue({ comparator: (a, b) => b[1] - a[1] }); // Priority queue sorted by distance (descending order)
+
+//         // Initialize distances for all waypoints to negative infinity except startWaypoint
+//         const waypoints = Array.from(slopeMap.keys()).concat(Array.from(liftMap.keys()));
+//         waypoints.forEach((waypoint) => {
+//             distances.set(waypoint, waypoint === startWaypoint ? 0 : Number.NEGATIVE_INFINITY);
+//             pq.queue([waypoint, distances.get(waypoint)]);
+//         });
+
+//         // Initialize a map to store the previous node in the longest path
+//         const previous = new Map();
+
+//         // Dijkstra's algorithm
+//         while (pq.length) {
+//             const [currentId, currentDistance] = pq.dequeue();
+
+//             // Check neighboring slopes
+//             const currentSlopes = slopeMap.get(currentId) || [];
+//             currentSlopes.forEach((currentSlope) => {
+//                 const neighborId = currentSlope.end._id.toString();
+//                 const length = currentSlope.length;
+//                 const weight = (length / SLOPE_SPEED) * 60; // Convert hours to minutes
+
+//                 const newDistance = currentDistance + weight;
+//                 if (newDistance > distances.get(neighborId)) {
+//                     distances.set(neighborId, newDistance);
+//                     pq.queue([neighborId, newDistance]);
+//                     previous.set(neighborId, currentId);
+//                 }
+//             });
+
+//             // Check neighboring lifts
+//             const currentLifts = liftMap.get(currentId) || [];
+//             currentLifts.forEach(({ lift, index }) => {
+//                 const { waypoints } = lift;
+//                 const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+//                 const neighborId = waypoints[nextIndex]._id.toString();
+//                 const duration = LIFT_DURATIONS[lift.liftType]; // Get lift duration
+
+//                 const newDistance = currentDistance + duration;
+//                 if (newDistance > distances.get(neighborId)) {
+//                     distances.set(neighborId, newDistance);
+//                     pq.queue([neighborId, newDistance]);
+//                     previous.set(neighborId, currentId);
+//                 }
+//             });
+//         }
+
+//         // Reconstruct longest path
+//         const longestPath = [];
+//         let current = endWaypoint;
+//         while (current !== startWaypoint) {
+//             longestPath.unshift(current);
+//             current = previous.get(current);
+//         }
+//         longestPath.unshift(startWaypoint);
+
+//         // Return longest path
+//         res.json(longestPath);
+//     } catch (err) {
+//         res.status(500).json({ message: err.message });
+//     }
+// };
+
 exports.longestPathByTime = async (req, res) => {
     const { startWaypoint, endWaypoint } = req.body;
 
@@ -559,13 +665,144 @@ exports.longestPathByTime = async (req, res) => {
         }
         longestPath.unshift(startWaypoint);
 
-        // Return longest path
-        res.json(longestPath);
+        // Transform longest path to match the desired output format
+        const formattedLongestPath = [];
+        for (let i = 0; i < longestPath.length - 1; i++) {
+            const currentId = longestPath[i];
+            const nextId = longestPath[i + 1];
+            const slope = slopes.find(s => s.start._id.toString() === currentId && s.end._id.toString() === nextId);
+            if (slope) {
+                formattedLongestPath.push(currentId);
+                formattedLongestPath.push(slope);
+            } else {
+                const lift = lifts.find(l => {
+                    const waypointIds = l.waypoints.map(wp => wp._id.toString());
+                    return waypointIds.includes(currentId) && waypointIds.includes(nextId);
+                });
+                if (lift) {
+                    formattedLongestPath.push(currentId);
+                    formattedLongestPath.push(lift);
+                }
+            }
+        }
+        formattedLongestPath.push(endWaypoint);
+
+        // Return the formatted longest path
+        res.json(formattedLongestPath);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
+
+
+// exports.easiestPath = async (req, res) => {
+//     const { startWaypoint, endWaypoint } = req.body;
+
+//     try {
+//         // Define difficulty level weights
+//         const DIFFICULTY_WEIGHTS = {
+//             'level1': 1,
+//             'level2': 2,
+//             'level3': 3
+//         };
+
+//         // Find all slopes from the database
+//         const slopes = await Slope.find().populate('start end');
+
+//         // Find all lifts from the database
+//         const lifts = await Lift.find().populate('waypoints');
+
+//         // Create a map of slopes for easy lookup by start ID
+//         const slopeMap = new Map();
+//         slopes.forEach((slope) => {
+//             if (!slopeMap.has(slope.start._id.toString())) {
+//                 slopeMap.set(slope.start._id.toString(), []);
+//             }
+//             slopeMap.get(slope.start._id.toString()).push(slope);
+//         });
+
+//         // Create a map of lifts for easy lookup by waypoint IDs
+//         const liftMap = new Map();
+//         lifts.forEach((lift) => {
+//             lift.waypoints.forEach((waypoint, index) => {
+//                 const waypointId = waypoint._id.toString();
+//                 if (!liftMap.has(waypointId)) {
+//                     liftMap.set(waypointId, []);
+//                 }
+//                 liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+//             });
+//         });
+
+//         // Initialize distances map to store least difficulty level weights
+//         const weights = new Map();
+
+//         // Initialize a priority queue for Dijkstra's algorithm
+//         const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] }); // Priority queue sorted by weight
+
+//         // Initialize start waypoint weight to 0 and add it to the priority queue
+//         weights.set(startWaypoint, 0);
+//         pq.queue([startWaypoint, 0]);
+
+//         // Initialize a map to store the previous node in the easiest path
+//         const previous = new Map();
+
+//         // Dijkstra's algorithm
+//         while (pq.length) {
+//             const [currentId, currentWeight] = pq.dequeue();
+
+//             // If we reached the end waypoint, break out of the loop
+//             if (currentId === endWaypoint) {
+//                 break;
+//             }
+
+//             // Check neighboring slopes
+//             const currentSlopes = slopeMap.get(currentId) || [];
+//             currentSlopes.forEach((currentSlope) => {
+//                 const neighborId = currentSlope.end._id.toString();
+//                 const difficultyLevel = currentSlope.difficultyLevel;
+
+//                 const newWeight = currentWeight + DIFFICULTY_WEIGHTS[difficultyLevel];
+//                 if (!weights.has(neighborId) || newWeight < weights.get(neighborId)) {
+//                     weights.set(neighborId, newWeight);
+//                     pq.queue([neighborId, newWeight]);
+//                     previous.set(neighborId, currentId);
+//                 }
+//             });
+
+//             // Check neighboring lifts
+//             const currentLifts = liftMap.get(currentId) || [];
+//             currentLifts.forEach(({ lift, index }) => {
+//                 const { waypoints } = lift;
+//                 const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+//                 const neighborId = waypoints[nextIndex]._id.toString();
+
+//                 const difficultyLevel = 'lift'; // Assume lift difficulty level as 'lift'
+
+//                 const newWeight = currentWeight + DIFFICULTY_WEIGHTS[difficultyLevel];
+//                 if (!weights.has(neighborId) || newWeight < weights.get(neighborId)) {
+//                     weights.set(neighborId, newWeight);
+//                     pq.queue([neighborId, newWeight]);
+//                     previous.set(neighborId, currentId);
+//                 }
+//             });
+//         }
+
+//         // Reconstruct easiest path
+//         const easiestPath = [];
+//         let current = endWaypoint;
+//         while (current !== startWaypoint) {
+//             easiestPath.unshift(current);
+//             current = previous.get(current);
+//         }
+//         easiestPath.unshift(startWaypoint);
+
+//         // Return easiest path
+//         res.json(easiestPath);
+//     } catch (err) {
+//         res.status(500).json({ message: err.message });
+//     }
+// };
 
 exports.easiestPath = async (req, res) => {
     const { startWaypoint, endWaypoint } = req.body;
@@ -573,9 +810,9 @@ exports.easiestPath = async (req, res) => {
     try {
         // Define difficulty level weights
         const DIFFICULTY_WEIGHTS = {
-            'level1': 1,
-            'level2': 2,
-            'level3': 3
+            'Level1': 1,
+            'Level2': 2,
+            'Level3': 3
         };
 
         // Find all slopes from the database
@@ -605,7 +842,7 @@ exports.easiestPath = async (req, res) => {
             });
         });
 
-        // Initialize distances map to store least difficulty level weights
+        // Initialize weights map to store least difficulty level weights
         const weights = new Map();
 
         // Initialize a priority queue for Dijkstra's algorithm
@@ -637,7 +874,7 @@ exports.easiestPath = async (req, res) => {
                 if (!weights.has(neighborId) || newWeight < weights.get(neighborId)) {
                     weights.set(neighborId, newWeight);
                     pq.queue([neighborId, newWeight]);
-                    previous.set(neighborId, currentId);
+                    previous.set(neighborId, { id: currentId, type: 'slope', slope: currentSlope });
                 }
             });
 
@@ -654,7 +891,7 @@ exports.easiestPath = async (req, res) => {
                 if (!weights.has(neighborId) || newWeight < weights.get(neighborId)) {
                     weights.set(neighborId, newWeight);
                     pq.queue([neighborId, newWeight]);
-                    previous.set(neighborId, currentId);
+                    previous.set(neighborId, { id: currentId, type: 'lift', lift });
                 }
             });
         }
@@ -664,16 +901,31 @@ exports.easiestPath = async (req, res) => {
         let current = endWaypoint;
         while (current !== startWaypoint) {
             easiestPath.unshift(current);
-            current = previous.get(current);
+            current = previous.get(current).id;
         }
         easiestPath.unshift(startWaypoint);
 
-        // Return easiest path
-        res.json(easiestPath);
+        // Transform easiest path to match the desired output format
+        const formattedEasiestPath = [];
+        for (let i = 0; i < easiestPath.length - 1; i++) {
+            const currentId = easiestPath[i];
+            const nextId = easiestPath[i + 1];
+            const prevNode = previous.get(nextId);
+            if (prevNode.type === 'slope') {
+                formattedEasiestPath.push(currentId, prevNode.slope, nextId);
+            } else {
+                formattedEasiestPath.push(currentId, prevNode.lift, nextId);
+            }
+        }
+
+        // Return formatted easiest path
+        res.json(formattedEasiestPath);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
+
+
 
 exports.minLiftUsagePath = async (req, res) => {
     const { startWaypoint, endWaypoint } = req.body;
