@@ -12,5 +12,9 @@ npm install
 2. Run with
 
 ```
+node app.js
+```
+or 
+```
 npm start
 ```
