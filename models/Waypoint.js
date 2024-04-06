@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const waypointSchema = new mongoose.Schema({
   coordinates: {
-    type: [Number], // Assuming [longitude, latitude]
+    type: [Number],
     required: true,
   },
   name: {

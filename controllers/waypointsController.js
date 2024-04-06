@@ -4,13 +4,11 @@ const Waypoint = require('../models/Waypoint');
 const Lift = require('../models/Lift');
 
 exports.getShortestPath = async (req, res) => {
-    const { path1Id, path2Id } = req.params; // Receive two path IDs as input
+    const { path1Id, path2Id } = req.params;
 
     try {
-        // Find all slopes from the database
         const slopes = await Slope.find().populate('start end');
 
-        // Create a map of slopes for easy lookup by start and end IDs
         const slopeMap = new Map();
         slopes.forEach((slope) => {
             if (!slopeMap.has(slope.start._id.toString())) {
@@ -19,26 +17,23 @@ exports.getShortestPath = async (req, res) => {
             slopeMap.get(slope.start._id.toString()).push(slope);
         });
 
-        // Initialize Dijkstra's algorithm
         const distances = new Map();
         const visited = new Set();
         const previous = new Map();
 
-        // Initialize distances with Infinity, except for the start slope which has distance 0
         slopes.forEach((slope) => {
             distances.set(slope.start._id.toString(), Infinity);
             distances.set(slope.end._id.toString(), Infinity);
         });
 
-        // Start slope
+
         const startSlopeId = path1Id;
         const endSlopeId = path2Id;
         distances.set(startSlopeId, 0);
 
-        let reachableSlopes = slopes.length * 2; // Total number of reachable slopes
+        let reachableSlopes = slopes.length * 2;
 
         while (reachableSlopes > 0) {
-            // Get the slope with the smallest distance that hasn't been visited yet
             let currentSlopeId = null;
             let minDistance = Infinity;
             distances.forEach((distance, slopeId) => {
@@ -48,19 +43,14 @@ exports.getShortestPath = async (req, res) => {
                 }
             });
 
-            // If no reachable slopes left, break
             if (currentSlopeId === null) break;
 
-            // Mark current slope as visited
             visited.add(currentSlopeId);
 
-            // Update distances to neighboring slopes
             const currentSlopes = slopeMap.get(currentSlopeId);
             if (currentSlopes) {
-                // Add this check
                 currentSlopes.forEach((currentSlope) => {
                     const neighborId = currentSlope.end._id.toString();
-                    // Calculate weight based on length and incline
                     const weight = currentSlope.length * currentSlope.incline;
                     const totalDistance = distances.get(currentSlopeId) + weight;
                     if (totalDistance < distances.get(neighborId)) {
@@ -69,15 +59,14 @@ exports.getShortestPath = async (req, res) => {
                     }
                 });
             }
-            reachableSlopes--; // Reduce the count of reachable slopes
+            reachableSlopes--;
         }
 
-        // Reconstruct the shortest path
         let currentSlopeId = endSlopeId;
         const shortestPath = [];
         let totalLength = 0;
         let difficultyLevels = {};
-        let waypoints = []; // Define an array to hold the waypoints
+        let waypoints = [];
         while (currentSlopeId !== startSlopeId) {
             const prevSlopeId = previous.get(currentSlopeId);
             const prevSlopes = slopeMap.get(prevSlopeId);
@@ -88,14 +77,12 @@ exports.getShortestPath = async (req, res) => {
             totalLength += currentSlope.length;
             difficultyLevels[currentSlope.difficultyLevel] =
                 (difficultyLevels[currentSlope.difficultyLevel] || 0) + 1;
-            waypoints.push(currentSlope.start._id); // Add the start waypoint of each slope to the array
+            waypoints.push(currentSlope.start._id);
             currentSlopeId = prevSlopeId;
         }
 
-        // Add the end waypoint of the last slope
         waypoints.push(shortestPath[shortestPath.length - 1].end._id);
 
-        // Determine the most common difficulty level
         let maxCount = 0;
         let commonDifficultyLevel = '';
         for (const [difficultyLevel, count] of Object.entries(difficultyLevels)) {
@@ -104,11 +91,10 @@ exports.getShortestPath = async (req, res) => {
                 commonDifficultyLevel = difficultyLevel;
             }
         }
-        
 
-        // Return the shortest path in the Path model format
+
         res.json({
-            waypoints: waypoints, // Use the waypoints array
+            waypoints: waypoints,
             slopes: shortestPath,
             length: totalLength,
             difficultyLevel: commonDifficultyLevel,
@@ -123,24 +109,19 @@ exports.allByPathByDifficultyLevel = async (req, res) => {
     const { startWaypoint, endWaypoint, level1, level2, level3 } = req.body;
 
     try {
-        // Initialize an array to store selected difficulty levels
         const selectedDifficultyLevels = [];
         if (level1) selectedDifficultyLevels.push('Level1');
         if (level2) selectedDifficultyLevels.push('Level2');
         if (level3) selectedDifficultyLevels.push('Level3');
 
-        // If no difficulty levels are selected, return empty result
         if (selectedDifficultyLevels.length === 0) {
             return res.json(["Nothing to show"]);
         }
 
-        // Find slopes from the database based on selected difficulty levels
         const slopes = await Slope.find({ difficultyLevel: { $in: selectedDifficultyLevels } }).populate('start end');
 
-        // Find all lifts from the database
         const lifts = await Lift.find().populate('waypoints');
 
-        // Create a map of slopes for easy lookup by start ID
         const slopeMap = new Map();
         slopes.forEach((slope) => {
             if (!slopeMap.has(slope.start._id.toString())) {
@@ -149,7 +130,6 @@ exports.allByPathByDifficultyLevel = async (req, res) => {
             slopeMap.get(slope.start._id.toString()).push(slope);
         });
 
-        // Create a map of lifts for easy lookup by waypoint IDs
         const liftMap = new Map();
         lifts.forEach((lift) => {
             lift.waypoints.forEach((waypoint) => {
@@ -162,18 +142,14 @@ exports.allByPathByDifficultyLevel = async (req, res) => {
         });
         console.log("Slopes and Lifts");
         console.log(slopeMap, liftMap);
-        // Initialize an array to store all paths
         const allPaths = [];
 
-        // Define a recursive function for DFS
         const dfs = (currentId, path) => {
             path.push(currentId);
 
-            // If we reached the end, add the path to allPaths
             if (currentId === endWaypoint) {
                 allPaths.push([...path]);
             } else {
-                // Otherwise, continue the search on all neighboring slopes and lifts
                 const currentSlopes = slopeMap.get(currentId) || [];
                 currentSlopes.forEach((currentSlope) => {
                     const neighborId = currentSlope.end._id.toString();
@@ -193,14 +169,11 @@ exports.allByPathByDifficultyLevel = async (req, res) => {
                 });
             }
 
-            // Backtrack
             path.pop();
         };
 
-        // Start the DFS
         dfs(startWaypoint, []);
 
-        // Return all paths
         res.json(allPaths);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -209,18 +182,15 @@ exports.allByPathByDifficultyLevel = async (req, res) => {
 
 const PriorityQueue = require('js-priority-queue');
 
-const SLOPE_SPEED = 20; // km/hr
+const SLOPE_SPEED = 20;
 exports.shortestPathbyTime = async (req, res) => {
     const { startWaypoint, endWaypoint } = req.body;
 
     try {
-        // Find all slopes from the database
         const slopes = await Slope.find().populate('start end');
 
-        // Find all lifts from the database
         const lifts = await Lift.find().populate('waypoints');
 
-        // Create a map of slopes for easy lookup by start ID
         const slopeMap = new Map();
         slopes.forEach((slope) => {
             if (!slopeMap.has(slope.start._id.toString())) {
@@ -229,7 +199,6 @@ exports.shortestPathbyTime = async (req, res) => {
             slopeMap.get(slope.start._id.toString()).push(slope);
         });
 
-        // Create a map of lifts for easy lookup by waypoint IDs
         const liftMap = new Map();
         lifts.forEach((lift) => {
             lift.waypoints.forEach((waypoint, index) => {
@@ -237,43 +206,35 @@ exports.shortestPathbyTime = async (req, res) => {
                 if (!liftMap.has(waypointId)) {
                     liftMap.set(waypointId, []);
                 }
-                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+                liftMap.get(waypointId).push({ lift, index });
             });
         });
 
-        // Initialize distances map to store shortest distances
         const distances = new Map();
 
-        // Initialize a priority queue for Dijkstra's algorithm
-        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] }); // Priority queue sorted by distance
+        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] });
 
-        // Initialize start waypoint distance to 0 and add it to the priority queue
         distances.set(startWaypoint, 0);
         pq.queue([startWaypoint, 0]);
 
-        // Initialize a map to store the previous node in the shortest path
         const previous = new Map();
 
-        // Dijkstra's algorithm
         while (pq.length) {
             const [currentId, currentDistance] = pq.dequeue();
 
-            // If we reached the end waypoint, break out of the loop
             if (currentId === endWaypoint) {
                 break;
             }
 
-            // If the current distance is greater than the stored distance, skip
             if (currentDistance > distances.get(currentId)) {
                 continue;
             }
 
-            // Check neighboring slopes
             const currentSlopes = slopeMap.get(currentId) || [];
             currentSlopes.forEach((currentSlope) => {
                 const neighborId = currentSlope.end._id.toString();
                 const length = currentSlope.length;
-                const weight = (length / SLOPE_SPEED) * 60; // Convert hours to minutes
+                const weight = (length / SLOPE_SPEED) * 60;
 
                 const newDistance = currentDistance + weight;
                 if (!distances.has(neighborId) || newDistance < distances.get(neighborId)) {
@@ -283,25 +244,24 @@ exports.shortestPathbyTime = async (req, res) => {
                 }
             });
 
-            // Check neighboring lifts
             const currentLifts = liftMap.get(currentId) || [];
             currentLifts.forEach(({ lift, index }) => {
                 const { waypoints } = lift;
-                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1;
                 const neighborId = waypoints[nextIndex]._id.toString();
                 let weight = 0;
                 switch (lift.liftType) {
                     case '6-chair lift':
-                        weight = 7; // 7 minutes
+                        weight = 7;
                         break;
                     case 'T-Lift':
-                        weight = 5; // 5 minutes
+                        weight = 5;
                         break;
                     case 'Gondola':
-                        weight = 10; // 10 minutes
+                        weight = 10;
                         break;
                     default:
-                        weight = 0; // Default weight (shouldn't happen)
+                        weight = 0;
                 }
 
                 const newDistance = currentDistance + weight;
@@ -313,7 +273,6 @@ exports.shortestPathbyTime = async (req, res) => {
             });
         }
 
-        // Reconstruct shortest path
         const shortestPath = [];
         let current = endWaypoint;
         while (current !== startWaypoint) {
@@ -322,7 +281,6 @@ exports.shortestPathbyTime = async (req, res) => {
         }
         shortestPath.unshift(startWaypoint);
 
-        // Transform shortest path to match the output format
         const formattedShortestPath = [];
         for (let i = 0; i < shortestPath.length - 1; i++) {
             const currentId = shortestPath[i];
@@ -344,7 +302,6 @@ exports.shortestPathbyTime = async (req, res) => {
         }
         formattedShortestPath.push(endWaypoint);
 
-        // Return shortest path
         res.json(formattedShortestPath);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -710,20 +667,16 @@ exports.longestPathByTime = async (req, res) => {
     const { startWaypoint, endWaypoint } = req.body;
 
     try {
-        // Define lift durations
         const LIFT_DURATIONS = {
-            '6-chair lift': 7, // 7 minutes
-            'T-Lift': 5, // 5 minutes
-            'Gondola': 10 // 10 minutes
+            '6-chair lift': 7,
+            'T-Lift': 5,
+            'Gondola': 10
         };
 
-        // Find all slopes from the database
         const slopes = await Slope.find().populate('start end');
 
-        // Find all lifts from the database
         const lifts = await Lift.find().populate('waypoints');
 
-        // Create a map of slopes for easy lookup by start ID
         const slopeMap = new Map();
         slopes.forEach((slope) => {
             if (!slopeMap.has(slope.start._id.toString())) {
@@ -732,7 +685,7 @@ exports.longestPathByTime = async (req, res) => {
             slopeMap.get(slope.start._id.toString()).push(slope);
         });
 
-        // Create a map of lifts for easy lookup by waypoint IDs
+
         const liftMap = new Map();
         lifts.forEach((lift) => {
             lift.waypoints.forEach((waypoint, index) => {
@@ -740,36 +693,30 @@ exports.longestPathByTime = async (req, res) => {
                 if (!liftMap.has(waypointId)) {
                     liftMap.set(waypointId, []);
                 }
-                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+                liftMap.get(waypointId).push({ lift, index });
             });
         });
 
-        // Initialize distances map to store longest distances
         const distances = new Map();
 
-        // Initialize a priority queue for Dijkstra's algorithm
-        const pq = new PriorityQueue({ comparator: (a, b) => b[1] - a[1] }); // Priority queue sorted by distance (descending order)
+        const pq = new PriorityQueue({ comparator: (a, b) => b[1] - a[1] });
 
-        // Initialize distances for all waypoints to negative infinity except startWaypoint
         const waypoints = Array.from(slopeMap.keys()).concat(Array.from(liftMap.keys()));
         waypoints.forEach((waypoint) => {
             distances.set(waypoint, waypoint === startWaypoint ? 0 : Number.NEGATIVE_INFINITY);
             pq.queue([waypoint, distances.get(waypoint)]);
         });
 
-        // Initialize a map to store the previous node in the longest path
         const previous = new Map();
 
-        // Dijkstra's algorithm
         while (pq.length) {
             const [currentId, currentDistance] = pq.dequeue();
 
-            // Check neighboring slopes
             const currentSlopes = slopeMap.get(currentId) || [];
             currentSlopes.forEach((currentSlope) => {
                 const neighborId = currentSlope.end._id.toString();
                 const length = currentSlope.length;
-                const weight = (length / SLOPE_SPEED) * 60; // Convert hours to minutes
+                const weight = (length / SLOPE_SPEED) * 60;
 
                 const newDistance = currentDistance + weight;
                 if (newDistance > distances.get(neighborId)) {
@@ -779,13 +726,12 @@ exports.longestPathByTime = async (req, res) => {
                 }
             });
 
-            // Check neighboring lifts
             const currentLifts = liftMap.get(currentId) || [];
             currentLifts.forEach(({ lift, index }) => {
                 const { waypoints } = lift;
-                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1;
                 const neighborId = waypoints[nextIndex]._id.toString();
-                const duration = LIFT_DURATIONS[lift.liftType]; // Get lift duration
+                const duration = LIFT_DURATIONS[lift.liftType];
 
                 const newDistance = currentDistance + duration;
                 if (newDistance > distances.get(neighborId)) {
@@ -796,7 +742,6 @@ exports.longestPathByTime = async (req, res) => {
             });
         }
 
-        // Reconstruct longest path
         const longestPath = [];
         let current = endWaypoint;
         while (current !== startWaypoint) {
@@ -805,7 +750,6 @@ exports.longestPathByTime = async (req, res) => {
         }
         longestPath.unshift(startWaypoint);
 
-        // Transform longest path to match the desired output format
         const formattedLongestPath = [];
         for (let i = 0; i < longestPath.length - 1; i++) {
             const currentId = longestPath[i];
@@ -827,7 +771,6 @@ exports.longestPathByTime = async (req, res) => {
         }
         formattedLongestPath.push(endWaypoint);
 
-        // Return the formatted longest path
         res.json(formattedLongestPath);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -948,20 +891,16 @@ exports.easiestPath = async (req, res) => {
     const { startWaypoint, endWaypoint } = req.body;
 
     try {
-        // Define difficulty level weights
         const DIFFICULTY_WEIGHTS = {
             'Level1': 1,
             'Level2': 2,
             'Level3': 3
         };
 
-        // Find all slopes from the database
         const slopes = await Slope.find().populate('start end');
 
-        // Find all lifts from the database
         const lifts = await Lift.find().populate('waypoints');
 
-        // Create a map of slopes for easy lookup by start ID
         const slopeMap = new Map();
         slopes.forEach((slope) => {
             if (!slopeMap.has(slope.start._id.toString())) {
@@ -970,7 +909,6 @@ exports.easiestPath = async (req, res) => {
             slopeMap.get(slope.start._id.toString()).push(slope);
         });
 
-        // Create a map of lifts for easy lookup by waypoint IDs
         const liftMap = new Map();
         lifts.forEach((lift) => {
             lift.waypoints.forEach((waypoint, index) => {
@@ -978,33 +916,27 @@ exports.easiestPath = async (req, res) => {
                 if (!liftMap.has(waypointId)) {
                     liftMap.set(waypointId, []);
                 }
-                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+                liftMap.get(waypointId).push({ lift, index });
             });
         });
 
-        // Initialize weights map to store least difficulty level weights
         const weights = new Map();
 
-        // Initialize a priority queue for Dijkstra's algorithm
-        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] }); // Priority queue sorted by weight
+        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] });
 
-        // Initialize start waypoint weight to 0 and add it to the priority queue
+
         weights.set(startWaypoint, 0);
         pq.queue([startWaypoint, 0]);
 
-        // Initialize a map to store the previous node in the easiest path
         const previous = new Map();
 
-        // Dijkstra's algorithm
         while (pq.length) {
             const [currentId, currentWeight] = pq.dequeue();
 
-            // If we reached the end waypoint, break out of the loop
             if (currentId === endWaypoint) {
                 break;
             }
 
-            // Check neighboring slopes
             const currentSlopes = slopeMap.get(currentId) || [];
             currentSlopes.forEach((currentSlope) => {
                 const neighborId = currentSlope.end._id.toString();
@@ -1018,14 +950,13 @@ exports.easiestPath = async (req, res) => {
                 }
             });
 
-            // Check neighboring lifts
             const currentLifts = liftMap.get(currentId) || [];
             currentLifts.forEach(({ lift, index }) => {
                 const { waypoints } = lift;
-                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1;
                 const neighborId = waypoints[nextIndex]._id.toString();
 
-                const difficultyLevel = 'lift'; // Assume lift difficulty level as 'lift'
+                const difficultyLevel = 'lift';
 
                 const newWeight = currentWeight + DIFFICULTY_WEIGHTS[difficultyLevel];
                 if (!weights.has(neighborId) || newWeight < weights.get(neighborId)) {
@@ -1036,7 +967,6 @@ exports.easiestPath = async (req, res) => {
             });
         }
 
-        // Reconstruct easiest path
         const easiestPath = [];
         let current = endWaypoint;
         while (current !== startWaypoint) {
@@ -1045,7 +975,6 @@ exports.easiestPath = async (req, res) => {
         }
         easiestPath.unshift(startWaypoint);
 
-        // Transform easiest path to match the desired output format
         const formattedEasiestPath = [];
         for (let i = 0; i < easiestPath.length - 1; i++) {
             const currentId = easiestPath[i];
@@ -1058,7 +987,6 @@ exports.easiestPath = async (req, res) => {
             }
         }
 
-        // Return formatted easiest path
         res.json(formattedEasiestPath);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -1069,20 +997,16 @@ exports.minLiftUsagePath = async (req, res) => {
     const { startWaypoint, endWaypoint } = req.body;
 
     try {
-        // Define lift type weights
         const LIFT_TYPE_WEIGHTS = {
             '6-chair lift': 1,
             'T-Lift': 1,
             'Gondola': 2
         };
 
-        // Find all slopes from the database
         const slopes = await Slope.find().populate('start end');
 
-        // Find all lifts from the database
         const lifts = await Lift.find().populate('waypoints');
 
-        // Create a map of slopes for easy lookup by start ID
         const slopeMap = new Map();
         slopes.forEach((slope) => {
             if (!slopeMap.has(slope.start._id.toString())) {
@@ -1091,7 +1015,6 @@ exports.minLiftUsagePath = async (req, res) => {
             slopeMap.get(slope.start._id.toString()).push(slope);
         });
 
-        // Create a map of lifts for easy lookup by waypoint IDs
         const liftMap = new Map();
         lifts.forEach((lift) => {
             lift.waypoints.forEach((waypoint, index) => {
@@ -1099,33 +1022,26 @@ exports.minLiftUsagePath = async (req, res) => {
                 if (!liftMap.has(waypointId)) {
                     liftMap.set(waypointId, []);
                 }
-                liftMap.get(waypointId).push({ lift, index }); // Include index for directionality
+                liftMap.get(waypointId).push({ lift, index });
             });
         });
 
-        // Initialize lift usage map to store minimum lift usage
         const liftUsage = new Map();
 
-        // Initialize a priority queue for Dijkstra's algorithm
-        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] }); // Priority queue sorted by lift usage
+        const pq = new PriorityQueue({ comparator: (a, b) => a[1] - b[1] });
 
-        // Initialize start waypoint lift usage to 0 and add it to the priority queue
         liftUsage.set(startWaypoint, 0);
         pq.queue([startWaypoint, 0]);
 
-        // Initialize a map to store the previous node in the path with minimum lift usage
         const previous = new Map();
 
-        // Dijkstra's algorithm
         while (pq.length) {
             const [currentId, currentLiftUsage] = pq.dequeue();
 
-            // If we reached the end waypoint, break out of the loop
             if (currentId === endWaypoint) {
                 break;
             }
 
-            // Check neighboring slopes
             const currentSlopes = slopeMap.get(currentId) || [];
             currentSlopes.forEach((currentSlope) => {
                 const neighborId = currentSlope.end._id.toString();
@@ -1138,11 +1054,10 @@ exports.minLiftUsagePath = async (req, res) => {
                 }
             });
 
-            // Check neighboring lifts
             const currentLifts = liftMap.get(currentId) || [];
             currentLifts.forEach(({ lift, index }) => {
                 const { waypoints } = lift;
-                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1; // Check next waypoint in both directions
+                const nextIndex = index + 1 < waypoints.length ? index + 1 : index - 1;
                 const neighborId = waypoints[nextIndex]._id.toString();
                 const liftType = lift.liftType;
 
@@ -1155,7 +1070,6 @@ exports.minLiftUsagePath = async (req, res) => {
             });
         }
 
-        // Reconstruct path with minimum lift usage
         const minLiftUsagePath = [];
         let current = endWaypoint;
         while (current !== startWaypoint) {
@@ -1164,7 +1078,6 @@ exports.minLiftUsagePath = async (req, res) => {
         }
         minLiftUsagePath.unshift(startWaypoint);
 
-        // Transform the path to the desired response format
         const formattedMinLiftUsagePath = [];
         for (let i = 0; i < minLiftUsagePath.length - 1; i++) {
             const currentId = minLiftUsagePath[i];
@@ -1186,7 +1099,6 @@ exports.minLiftUsagePath = async (req, res) => {
         }
         formattedMinLiftUsagePath.push(endWaypoint);
 
-        // Return the formatted path with minimum lift usage
         res.json(formattedMinLiftUsagePath);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -1302,13 +1214,11 @@ exports.minLiftUsagePath = async (req, res) => {
 
 
 exports.getAllPaths = async (req, res) => {
-    const { startId, endId } = req.params; // Receive start and end IDs as input
+    const { startId, endId } = req.params;
 
     try {
-        // Find all slopes from the database
         const slopes = await Slope.find().populate('start end');
 
-        // Create a map of slopes for easy lookup by start ID
         const slopeMap = new Map();
         slopes.forEach((slope) => {
             if (!slopeMap.has(slope.start._id.toString())) {
@@ -1317,36 +1227,29 @@ exports.getAllPaths = async (req, res) => {
             slopeMap.get(slope.start._id.toString()).push(slope);
         });
 
-        // Initialize an array to store all paths
         const allPaths = [];
 
-        // Define a recursive function for DFS
         const dfs = (currentId, path) => {
             path.push(currentId);
 
-            // If we reached the end, add the path to allPaths
             if (currentId === endId) {
                 allPaths.push([...path]);
             } else {
-                // Otherwise, continue the search on all neighboring slopes
                 const currentSlopes = slopeMap.get(currentId);
                 if (currentSlopes) {
                     currentSlopes.forEach((currentSlope) => {
                         const neighborId = currentSlope.end._id.toString();
                         if (!path.includes(neighborId)) {
-                            dfs(neighborId, [...path, currentSlope]); // Include the current slope in the path
+                            dfs(neighborId, [...path, currentSlope]);
                         }
                     });
                 }
             }
 
-            // Backtrack
             path.pop();
         };
 
-        // Start the DFS
         dfs(startId, []);
-        // Return all paths
         res.json(allPaths);
     } catch (err) {
         res.status(500).json({ message: err.message });

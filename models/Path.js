@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-//this will be our route. in this iteration2 we will only return the static path
 const pathSchema = new mongoose.Schema({
     waypoints: [{
       type: mongoose.Schema.Types.ObjectId,
@@ -12,7 +11,7 @@ const pathSchema = new mongoose.Schema({
     lift: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Lift',
-      required: false // Since a path might not always include a lift
+      required: false
     },
     difficultyLevel: String,
     length: Number
