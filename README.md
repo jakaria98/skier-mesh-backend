@@ -12,7 +12,7 @@ npm install
 2. Run with
 
 ```
-nodemon app.js
+node app.js
 ```
 or 
 ```
